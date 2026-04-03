@@ -33,12 +33,21 @@ const GoalsPage = () => {
   const fetchGoals = async () => {
     try {
       setLoading(true);
-      const mockGoals = [
-        { id: 1, name: 'Viagem para Europa', targetAmount: 15000, currentAmount: 4200, description: 'Férias em família' },
-        { id: 2, name: 'Fundo de emergência', targetAmount: 20000, currentAmount: 12500, description: '6 meses de despesas' },
-        { id: 3, name: 'Carro novo', targetAmount: 80000, currentAmount: 18000, description: 'SUV familiar' }
-      ];
-      setGoals(mockGoals);
+      const records = await pb.collection('goals').getFullList({
+        sort: '-created',
+        $autoCancel: false,
+      });
+
+      const normalizedGoals = records.map((record) => ({
+        id: record.id,
+        name: record.title || 'Meta sem nome',
+        targetAmount: Number(record.targetAmount || 0),
+        currentAmount: Number(record.currentAmount || 0),
+        description: record.description || '',
+        deadline: record.deadline || null,
+      }));
+
+      setGoals(normalizedGoals);
     } catch (error) {
       console.error('Error fetching goals:', error);
       toast.error('Erro ao carregar metas');
@@ -50,12 +59,29 @@ const GoalsPage = () => {
   const handleGoalSubmit = async (e) => {
     e.preventDefault();
     try {
+      const userId = pb.authStore.model?.id;
+
+      if (!userId) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      const created = await pb.collection('goals').create({
+        userId,
+        title: goalFormData.name.trim(),
+        description: goalFormData.description?.trim() || '',
+        targetAmount: Number(goalFormData.targetAmount),
+        currentAmount: 0,
+      }, { $autoCancel: false });
+
       const newGoal = {
-        id: Date.now(),
-        ...goalFormData,
-        targetAmount: parseFloat(goalFormData.targetAmount),
-        currentAmount: 0
+        id: created.id,
+        name: created.title || 'Meta sem nome',
+        targetAmount: Number(created.targetAmount || 0),
+        currentAmount: Number(created.currentAmount || 0),
+        description: created.description || '',
+        deadline: created.deadline || null,
       };
+
       setGoals(prev => [newGoal, ...prev]);
       toast.success('Meta criada com sucesso');
       setGoalDialogOpen(false);
@@ -73,11 +99,28 @@ const GoalsPage = () => {
   const handleAllocateSubmit = async (e) => {
     e.preventDefault();
     try {
-      const amount = parseFloat(allocateAmount);
+      const amount = Number(allocateAmount);
+
+      if (!amount || amount <= 0) {
+        toast.error('Digite um valor válido para alocar');
+        return;
+      }
+
+      const updated = await pb.collection('goals').update(selectedGoal.id, {
+        currentAmount: Number(selectedGoal.currentAmount || 0) + amount,
+      }, { $autoCancel: false });
+
+      const updatedGoal = {
+        id: updated.id,
+        name: updated.title || 'Meta sem nome',
+        targetAmount: Number(updated.targetAmount || 0),
+        currentAmount: Number(updated.currentAmount || 0),
+        description: updated.description || '',
+        deadline: updated.deadline || null,
+      };
+
       setGoals(prev => prev.map(g => 
-        g.id === selectedGoal.id 
-          ? { ...g, currentAmount: g.currentAmount + amount }
-          : g
+        g.id === selectedGoal.id ? updatedGoal : g
       ));
       toast.success('Valor alocado com sucesso');
       setAllocateDialogOpen(false);
@@ -92,6 +135,7 @@ const GoalsPage = () => {
   const handleDeleteGoal = async (id) => {
     if (window.confirm('Deseja realmente excluir esta meta?')) {
       try {
+        await pb.collection('goals').delete(id, { $autoCancel: false });
         setGoals(prev => prev.filter(g => g.id !== id));
         toast.success('Meta excluída');
       } catch (error) {
@@ -114,6 +158,10 @@ const GoalsPage = () => {
   };
 
   const calculateProgress = (current, target) => {
+    if (!target || target <= 0) {
+      return 0;
+    }
+
     return Math.min((current / target) * 100, 100);
   };
 

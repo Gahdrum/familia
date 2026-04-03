@@ -22,13 +22,67 @@ const FinancialCalendarPage = () => {
   const fetchEvents = async () => {
     try {
       setLoading(true);
-      const mockEvents = [
-        { id: 1, date: '2026-04-05', type: 'bill', description: 'Aluguel', amount: 1500 },
-        { id: 2, date: '2026-04-08', type: 'bill', description: 'Energia', amount: 287.50 },
-        { id: 3, date: '2026-04-01', type: 'income', description: 'Salário', amount: 5000 },
-        { id: 4, date: '2026-04-15', type: 'goal', description: 'Contribuição viagem', amount: 500 }
-      ];
-      setEvents(mockEvents);
+      const userId = pb.authStore.model?.id;
+
+      if (!userId) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const startDate = new Date(year, month, 1).toISOString().slice(0, 10);
+      const endDate = new Date(year, month + 1, 1).toISOString().slice(0, 10);
+
+      const [transactions, incomes, goals] = await Promise.all([
+        pb.collection('transactions').getFullList({
+          filter: `userId = "${userId}" && date >= "${startDate}" && date < "${endDate}"`,
+          sort: 'date',
+          expand: 'category',
+          $autoCancel: false,
+        }),
+        pb.collection('incomes').getFullList({
+          filter: `userId = "${userId}" && date >= "${startDate}" && date < "${endDate}"`,
+          sort: 'date',
+          $autoCancel: false,
+        }),
+        pb.collection('goals').getFullList({
+          filter: `userId = "${userId}" && deadline != "" && deadline >= "${startDate}" && deadline < "${endDate}"`,
+          sort: 'deadline',
+          $autoCancel: false,
+        }),
+      ]);
+
+      const incomeTypeLabels = {
+        salary: 'Salário',
+        business: 'Negócio',
+        proLabore: 'Pró-labore',
+      };
+
+      const transactionEvents = transactions.map((record) => ({
+        id: `transaction-${record.id}`,
+        date: record.date,
+        type: 'bill',
+        description: record.description || record.expand?.category?.name || 'Despesa',
+        amount: Number(record.amount || 0),
+      }));
+
+      const incomeEvents = incomes.map((record) => ({
+        id: `income-${record.id}`,
+        date: record.date,
+        type: 'income',
+        description: record.description || incomeTypeLabels[record.type] || 'Receita',
+        amount: Number(record.amount || 0),
+      }));
+
+      const goalEvents = goals.map((record) => ({
+        id: `goal-${record.id}`,
+        date: record.deadline,
+        type: 'goal',
+        description: record.title || 'Meta financeira',
+        amount: Number(record.targetAmount || 0),
+      }));
+
+      setEvents([...transactionEvents, ...incomeEvents, ...goalEvents]);
     } catch (error) {
       console.error('Error fetching events:', error);
       toast.error('Erro ao carregar eventos');
@@ -54,10 +108,12 @@ const FinancialCalendarPage = () => {
   };
 
   const previousMonth = () => {
+    setSelectedDate(null);
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
   };
 
   const nextMonth = () => {
+    setSelectedDate(null);
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1));
   };
 
