@@ -19,7 +19,7 @@ const Header = () => {
     { path: '/carteira-conjunta', label: 'Carteira Conjunta' },
     { path: '/carteira-individual', label: 'Carteira Individual' },
     { path: '/rateio', label: 'Rateio' },
-    { path: '/pf-pj', label: 'PF/PJ' },
+    { path: '/pf-pj', label: 'Empresa' },
     { path: '/metas', label: 'Metas' },
     { path: '/calendario', label: 'Calendário' },
     { path: '/integrations', label: 'Integrações' }

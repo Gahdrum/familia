@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Filter, Trash2, User, AlertCircle } from 'lucide-react';
+import { Plus, Filter, Trash2, Pencil, User, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { createTransaction, deleteTransaction, listCategories, listTransactionsByType } from '@/lib/financialApi';
 
@@ -22,6 +22,7 @@ const IndividualWalletPage = () => {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [incomeDialogOpen, setIncomeDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [categories, setCategories] = useState([]);
   const [formData, setFormData] = useState({
@@ -35,6 +36,13 @@ const IndividualWalletPage = () => {
     amount: '',
     description: '',
     type: 'salary'
+  });
+  const [editFormData, setEditFormData] = useState({
+    id: '',
+    date: '',
+    amount: '',
+    categoryId: '',
+    description: ''
   });
 
   const incomeTypes = [
@@ -175,6 +183,59 @@ const IndividualWalletPage = () => {
         console.error('Error deleting transaction:', error);
         toast.error('Erro ao excluir transação');
       }
+    }
+  };
+
+  const openEditDialog = (transaction) => {
+    const categoryId = categories.find((item) => item.name === transaction.category)?.id || '';
+
+    setEditFormData({
+      id: transaction.id,
+      date: transaction.date,
+      amount: String(transaction.amount),
+      categoryId,
+      description: transaction.description,
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!editFormData.categoryId) {
+      toast.error('Selecione uma categoria válida');
+      return;
+    }
+
+    try {
+      const updated = await pb.collection('transactions').update(editFormData.id, {
+        date: editFormData.date,
+        amount: Number(editFormData.amount),
+        category: editFormData.categoryId,
+        description: editFormData.description?.trim() || '',
+      }, {
+        expand: 'category',
+        $autoCancel: false,
+      });
+
+      const normalized = {
+        id: updated.id,
+        date: updated.date,
+        amount: Number(updated.amount || 0),
+        description: updated.description || 'Sem descrição',
+        type: updated.type,
+        paymentMethod: updated.paymentMethod,
+        category: updated.expand?.category?.name || updated.category || 'Outros',
+        categoryId: typeof updated.category === 'string' ? updated.category : updated.category?.id || null,
+        raw: updated,
+      };
+
+      setTransactions((prev) => prev.map((item) => item.id === editFormData.id ? normalized : item));
+      setEditDialogOpen(false);
+      toast.success('Transação atualizada com sucesso');
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+      toast.error('Erro ao atualizar transação');
     }
   };
 
@@ -459,6 +520,14 @@ const IndividualWalletPage = () => {
                         <Button
                           variant="ghost"
                           size="icon"
+                          onClick={() => openEditDialog(transaction)}
+                          className="text-primary hover:text-primary hover:bg-primary/10"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleDelete(transaction.id)}
                           className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
@@ -471,6 +540,64 @@ const IndividualWalletPage = () => {
               )}
             </CardContent>
           </Card>
+
+          <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Editar transação individual</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleEditSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-date">Data</Label>
+                  <Input
+                    id="edit-date"
+                    type="date"
+                    value={editFormData.date}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, date: e.target.value }))}
+                    required
+                    className="text-foreground"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-amount">Valor</Label>
+                  <Input
+                    id="edit-amount"
+                    type="number"
+                    step="0.01"
+                    value={editFormData.amount}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, amount: e.target.value }))}
+                    required
+                    className="text-foreground"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-category">Categoria</Label>
+                  <Select value={editFormData.categoryId} onValueChange={(value) => setEditFormData(prev => ({ ...prev, categoryId: value }))}>
+                    <SelectTrigger id="edit-category">
+                      <SelectValue placeholder="Selecione uma categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-description">Descrição</Label>
+                  <Input
+                    id="edit-description"
+                    type="text"
+                    value={editFormData.description}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, description: e.target.value }))}
+                    required
+                    className="text-foreground"
+                  />
+                </div>
+                <Button type="submit" className="w-full">Salvar alterações</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
       </main>
     </div>
