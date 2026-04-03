@@ -92,7 +92,9 @@ const DashboardPage = () => {
         category: item.scope || item.type,
       }));
 
-      const totalIncome = incomes.reduce((sum, item) => sum + Number(item.amount || 0), 0) || Number(currentUser?.monthlyIncome || 0);
+      const validIncomes = incomes.filter((item) => item.scope === 'joint' || item.scope === 'individual' || item.scope === 'business');
+
+      const totalIncome = validIncomes.reduce((sum, item) => sum + Number(item.amount || 0), 0) || Number(currentUser?.monthlyIncome || 0);
       const fixedExpenses = transactions
         .filter((item) => ['Moradia', 'Utilidades', 'Educação'].includes(item.expand?.category?.name || ''))
         .reduce((sum, item) => sum + Number(item.amount || 0), 0);
@@ -147,7 +149,7 @@ const DashboardPage = () => {
           $autoCancel: false,
         }))),
         Promise.all(recentMonths.map(({ start, end }) => pb.collection('incomes').getFullList({
-          filter: `userId = "${userId}" && date >= "${start}" && date < "${end}"`,
+          filter: `userId = "${userId}" && date >= "${start}" && date < "${end}" && (scope = "joint" || scope = "individual" || scope = "business")`,
           $autoCancel: false,
         }))),
       ]);
