@@ -59,31 +59,31 @@ const BusinessPage = () => {
 
       const [incomeRecords, withdrawalRecords] = await Promise.all([
         pb.collection('incomes').getFullList({
-          filter: `userId = "${userId}"`,
+          filter: `userId = "${userId}" && (type = "business" || type = "proLabore")`,
           sort: '-date,-created',
           $autoCancel: false,
         }),
         pb.collection('transactions').getFullList({
-          filter: `userId = "${userId}" && type = "individual" && description ~ "retirada"`,
+          filter: `userId = "${userId}" && type = "individual" && description ~ "retirada pj"`,
           sort: '-date,-created',
           $autoCancel: false,
         }),
       ]);
 
-      setIncomes(incomeRecords.map((item) => ({
-        id: item.id,
-        date: item.date,
-        amount: Number(item.amount || 0),
-        description: item.description || 'Receita',
-        type: incomeTypeLabels[item.type] || item.type,
-      })));
+        setIncomes(incomeRecords.map((item) => ({
+          id: item.id,
+          date: item.date,
+          amount: Number(item.amount || 0),
+          description: item.description || 'Receita PJ',
+          type: incomeTypeLabels[item.type] || item.type,
+        })));
 
-      setWithdrawals(withdrawalRecords.map((item) => ({
-        id: item.id,
-        date: item.date,
-        amount: Number(item.amount || 0),
-        description: item.description || 'Retirada',
-      })));
+        setWithdrawals(withdrawalRecords.map((item) => ({
+          id: item.id,
+          date: item.date,
+          amount: Number(item.amount || 0),
+          description: item.description || 'Retirada PJ',
+        })));
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Erro ao carregar dados');
@@ -145,7 +145,7 @@ const BusinessPage = () => {
       const created = await pb.collection('transactions').create({
         userId,
         type: 'individual',
-        description: withdrawalFormData.description?.trim() || 'Retirada',
+        description: withdrawalFormData.description?.trim() || 'Retirada PJ',
         amount: Number(withdrawalFormData.amount),
         date: withdrawalFormData.date,
         paymentMethod: 'transfer',
@@ -240,9 +240,9 @@ const BusinessPage = () => {
         <div className="space-y-6">
           <div>
             <h1 className="text-3xl md:text-4xl font-bold leading-tight mb-2" style={{ letterSpacing: '-0.02em' }}>
-              Gestão PF/PJ
+              Gestão PJ
             </h1>
-            <p className="text-muted-foreground">Controle de receitas e retiradas</p>
+            <p className="text-muted-foreground">Controle financeiro exclusivo da operação empresarial</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -278,7 +278,7 @@ const BusinessPage = () => {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5" />
-                Receitas
+                Receitas PJ
               </CardTitle>
               <Dialog open={incomeDialogOpen} onOpenChange={setIncomeDialogOpen}>
                 <DialogTrigger asChild>
@@ -289,7 +289,7 @@ const BusinessPage = () => {
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Nova receita</DialogTitle>
+                    <DialogTitle>Nova receita PJ</DialogTitle>
                   </DialogHeader>
                   <form onSubmit={handleIncomeSubmit} className="space-y-4">
                     <div className="space-y-2">
@@ -334,7 +334,7 @@ const BusinessPage = () => {
                       <Input
                         id="incomeDescription"
                         type="text"
-                        placeholder="Descrição da receita"
+                        placeholder="Descrição da receita empresarial"
                         value={incomeFormData.description}
                         onChange={(e) => setIncomeFormData(prev => ({ ...prev, description: e.target.value }))}
                         required
@@ -350,7 +350,7 @@ const BusinessPage = () => {
               {incomes.length === 0 ? (
                 <div className="text-center py-12">
                   <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">Nenhuma receita registrada</p>
+                  <p className="text-muted-foreground">Nenhuma receita PJ registrada</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -389,7 +389,7 @@ const BusinessPage = () => {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <ArrowDownToLine className="h-5 w-5" />
-                Pró-labore / Retiradas
+                Retiradas da PJ
               </CardTitle>
               <Dialog open={withdrawalDialogOpen} onOpenChange={setWithdrawalDialogOpen}>
                 <DialogTrigger asChild>
@@ -400,7 +400,7 @@ const BusinessPage = () => {
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Nova retirada</DialogTitle>
+                    <DialogTitle>Nova retirada da PJ</DialogTitle>
                   </DialogHeader>
                   <form onSubmit={handleWithdrawalSubmit} className="space-y-4">
                     <div className="space-y-2">
@@ -432,7 +432,7 @@ const BusinessPage = () => {
                       <Input
                         id="withdrawalDescription"
                         type="text"
-                        placeholder="Descrição da retirada"
+                        placeholder="Descrição da retirada da PJ"
                         value={withdrawalFormData.description}
                         onChange={(e) => setWithdrawalFormData(prev => ({ ...prev, description: e.target.value }))}
                         required
@@ -448,7 +448,7 @@ const BusinessPage = () => {
               {withdrawals.length === 0 ? (
                 <div className="text-center py-12">
                   <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">Nenhuma retirada registrada</p>
+                  <p className="text-muted-foreground">Nenhuma retirada da PJ registrada</p>
                 </div>
               ) : (
                 <div className="space-y-3">
