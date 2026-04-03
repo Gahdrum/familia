@@ -2,9 +2,19 @@ import 'dotenv/config';
 import OpenAI from 'openai';
 import logger from '../utils/logger.js';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openai = process.env.OPENAI_API_KEY
+  ? new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    })
+  : null;
+
+function ensureOpenAI() {
+  if (!openai) {
+    throw new Error('OPENAI_API_KEY não configurada');
+  }
+
+  return openai;
+}
 
 const EXPENSE_CATEGORIES = {
   'Supermercado': ['supermercado', 'mercado', 'compras', 'alimentos', 'padaria', 'açougue', 'hortifruti'],
@@ -23,11 +33,12 @@ const EXPENSE_CATEGORIES = {
  */
 export async function transcribeAudio(audioBuffer) {
   try {
+    const client = ensureOpenAI();
     logger.info('Transcribing audio with Whisper API');
 
     const file = new File([audioBuffer], 'audio.ogg', { type: 'audio/ogg' });
 
-    const transcript = await openai.audio.transcriptions.create({
+    const transcript = await client.audio.transcriptions.create({
       file: file,
       model: 'whisper-1',
       language: 'pt',
@@ -51,7 +62,8 @@ export async function transcribeAudio(audioBuffer) {
  */
 export async function extractIntent(text) {
   try {
-    const response = await openai.chat.completions.create({
+    const client = ensureOpenAI();
+    const response = await client.chat.completions.create({
       model: 'gpt-4',
       messages: [
         {
@@ -101,6 +113,7 @@ export function categorizeExpense(description) {
  */
 export async function extractEntities(text, intent) {
   try {
+    const client = ensureOpenAI();
     let prompt = '';
 
     switch (intent) {
@@ -126,7 +139,7 @@ export async function extractEntities(text, intent) {
         return {};
     }
 
-    const response = await openai.chat.completions.create({
+    const response = await client.chat.completions.create({
       model: 'gpt-4',
       messages: [
         {
