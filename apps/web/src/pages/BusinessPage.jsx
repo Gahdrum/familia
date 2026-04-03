@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Briefcase, TrendingUp, ArrowDownToLine, Trash2, AlertCircle } from 'lucide-react';
+import { Plus, Briefcase, TrendingUp, ArrowDownToLine, Trash2, Pencil, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 const BusinessPage = () => {
@@ -20,6 +20,7 @@ const BusinessPage = () => {
   const [loading, setLoading] = useState(true);
   const [incomeDialogOpen, setIncomeDialogOpen] = useState(false);
   const [withdrawalDialogOpen, setWithdrawalDialogOpen] = useState(false);
+  const [editIncomeDialogOpen, setEditIncomeDialogOpen] = useState(false);
   const [incomeFormData, setIncomeFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     amount: '',
@@ -30,6 +31,13 @@ const BusinessPage = () => {
     date: new Date().toISOString().split('T')[0],
     amount: '',
     description: ''
+  });
+  const [editIncomeFormData, setEditIncomeFormData] = useState({
+    id: '',
+    date: '',
+    amount: '',
+    description: '',
+    type: 'business'
   });
 
   const incomeTypes = [
@@ -130,7 +138,7 @@ const BusinessPage = () => {
       });
     } catch (error) {
       console.error('Error creating income:', error);
-      toast.error('Erro ao adicionar receita');
+      toast.error(error?.response?.message || error.message || 'Erro ao adicionar receita');
     }
   };
 
@@ -169,7 +177,7 @@ const BusinessPage = () => {
       });
     } catch (error) {
       console.error('Error creating withdrawal:', error);
-      toast.error('Erro ao registrar retirada');
+      toast.error(error?.response?.message || error.message || 'Erro ao registrar retirada');
     }
   };
 
@@ -183,6 +191,48 @@ const BusinessPage = () => {
         console.error('Error deleting income:', error);
         toast.error('Erro ao excluir receita');
       }
+    }
+  };
+
+  const openEditIncomeDialog = (income) => {
+    const incomeType = incomeTypes.find((item) => item.label === income.type)?.value || 'business';
+
+    setEditIncomeFormData({
+      id: income.id,
+      date: income.date,
+      amount: String(income.amount),
+      description: income.description,
+      type: incomeType,
+    });
+    setEditIncomeDialogOpen(true);
+  };
+
+  const handleEditIncomeSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      const updated = await pb.collection('incomes').update(editIncomeFormData.id, {
+        date: editIncomeFormData.date,
+        amount: Number(editIncomeFormData.amount),
+        description: editIncomeFormData.description?.trim() || '',
+        type: editIncomeFormData.type,
+      }, { $autoCancel: false });
+
+      setIncomes((prev) => prev.map((item) => item.id === editIncomeFormData.id
+        ? {
+            id: updated.id,
+            date: updated.date,
+            amount: Number(updated.amount || 0),
+            description: updated.description || 'Receita PJ',
+            type: incomeTypeLabels[updated.type] || updated.type,
+          }
+        : item));
+
+      setEditIncomeDialogOpen(false);
+      toast.success('Receita PJ atualizada com sucesso');
+    } catch (error) {
+      console.error('Error updating income:', error);
+      toast.error(error?.response?.message || error.message || 'Erro ao atualizar receita PJ');
     }
   };
 
@@ -371,6 +421,14 @@ const BusinessPage = () => {
                         <Button
                           variant="ghost"
                           size="icon"
+                          onClick={() => openEditIncomeDialog(income)}
+                          className="text-primary hover:text-primary hover:bg-primary/10"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleDeleteIncome(income.id)}
                           className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
@@ -383,6 +441,64 @@ const BusinessPage = () => {
               )}
             </CardContent>
           </Card>
+
+          <Dialog open={editIncomeDialogOpen} onOpenChange={setEditIncomeDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Editar receita PJ</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleEditIncomeSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-income-date">Data</Label>
+                  <Input
+                    id="edit-income-date"
+                    type="date"
+                    value={editIncomeFormData.date}
+                    onChange={(e) => setEditIncomeFormData(prev => ({ ...prev, date: e.target.value }))}
+                    required
+                    className="text-foreground"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-income-amount">Valor</Label>
+                  <Input
+                    id="edit-income-amount"
+                    type="number"
+                    step="0.01"
+                    value={editIncomeFormData.amount}
+                    onChange={(e) => setEditIncomeFormData(prev => ({ ...prev, amount: e.target.value }))}
+                    required
+                    className="text-foreground"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-income-type">Tipo</Label>
+                  <Select value={editIncomeFormData.type} onValueChange={(value) => setEditIncomeFormData(prev => ({ ...prev, type: value }))}>
+                    <SelectTrigger id="edit-income-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {incomeTypes.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-income-description">Descrição</Label>
+                  <Input
+                    id="edit-income-description"
+                    type="text"
+                    value={editIncomeFormData.description}
+                    onChange={(e) => setEditIncomeFormData(prev => ({ ...prev, description: e.target.value }))}
+                    required
+                    className="text-foreground"
+                  />
+                </div>
+                <Button type="submit" className="w-full">Salvar alterações</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
 
           <Separator />
 

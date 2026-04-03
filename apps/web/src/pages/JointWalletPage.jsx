@@ -21,6 +21,7 @@ const JointWalletPage = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [incomeDialogOpen, setIncomeDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editIncomeDialogOpen, setEditIncomeDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [categories, setCategories] = useState([]);
   const [formData, setFormData] = useState({
@@ -42,6 +43,13 @@ const JointWalletPage = () => {
     amount: '',
     categoryId: '',
     description: ''
+  });
+  const [editIncomeFormData, setEditIncomeFormData] = useState({
+    id: '',
+    date: '',
+    amount: '',
+    description: '',
+    type: 'salary'
   });
 
   const incomeTypes = [
@@ -139,7 +147,7 @@ const JointWalletPage = () => {
       });
     } catch (error) {
       console.error('Error creating income:', error);
-      toast.error('Erro ao adicionar receita');
+      toast.error(error?.response?.message || error.message || 'Erro ao adicionar receita');
     }
   };
 
@@ -171,7 +179,7 @@ const JointWalletPage = () => {
       });
     } catch (error) {
       console.error('Error creating transaction:', error);
-      toast.error('Erro ao adicionar transação');
+      toast.error(error?.response?.message || error.message || 'Erro ao adicionar transação');
     }
   };
 
@@ -184,6 +192,61 @@ const JointWalletPage = () => {
       } catch (error) {
         console.error('Error deleting transaction:', error);
         toast.error('Erro ao excluir transação');
+      }
+    }
+  };
+
+  const openEditIncomeDialog = (income) => {
+    const incomeType = incomeTypes.find((item) => item.label === income.type)?.value || 'salary';
+
+    setEditIncomeFormData({
+      id: income.id,
+      date: income.date,
+      amount: String(income.amount),
+      description: income.description,
+      type: incomeType,
+    });
+    setEditIncomeDialogOpen(true);
+  };
+
+  const handleEditIncomeSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      const updated = await pb.collection('incomes').update(editIncomeFormData.id, {
+        date: editIncomeFormData.date,
+        amount: Number(editIncomeFormData.amount),
+        description: editIncomeFormData.description?.trim() || '',
+        type: editIncomeFormData.type,
+      }, { $autoCancel: false });
+
+      setIncomes((prev) => prev.map((item) => item.id === editIncomeFormData.id
+        ? {
+            id: updated.id,
+            date: updated.date,
+            amount: Number(updated.amount || 0),
+            description: updated.description || 'Receita',
+            type: incomeTypeLabels[updated.type] || updated.type,
+          }
+        : item));
+
+      setEditIncomeDialogOpen(false);
+      toast.success('Receita atualizada com sucesso');
+    } catch (error) {
+      console.error('Error updating income:', error);
+      toast.error(error?.response?.message || error.message || 'Erro ao atualizar receita');
+    }
+  };
+
+  const handleDeleteIncome = async (id) => {
+    if (window.confirm('Deseja realmente excluir esta receita?')) {
+      try {
+        await pb.collection('incomes').delete(id, { $autoCancel: false });
+        setIncomes((prev) => prev.filter((item) => item.id !== id));
+        toast.success('Receita excluída');
+      } catch (error) {
+        console.error('Error deleting income:', error);
+        toast.error(error?.response?.message || error.message || 'Erro ao excluir receita');
       }
     }
   };
@@ -577,13 +640,89 @@ const JointWalletPage = () => {
                           <span className="text-sm text-muted-foreground">{formatDate(income.date)}</span>
                         </div>
                       </div>
-                      <p className="font-bold text-lg text-secondary">{formatCurrency(income.amount)}</p>
+                      <div className="flex items-center gap-3">
+                        <p className="font-bold text-lg text-secondary">{formatCurrency(income.amount)}</p>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openEditIncomeDialog(income)}
+                          className="text-primary hover:text-primary hover:bg-primary/10"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteIncome(income.id)}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
+
+          <Dialog open={editIncomeDialogOpen} onOpenChange={setEditIncomeDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Editar receita conjunta</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleEditIncomeSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-income-date">Data</Label>
+                  <Input
+                    id="edit-income-date"
+                    type="date"
+                    value={editIncomeFormData.date}
+                    onChange={(e) => setEditIncomeFormData(prev => ({ ...prev, date: e.target.value }))}
+                    required
+                    className="text-foreground"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-income-amount">Valor</Label>
+                  <Input
+                    id="edit-income-amount"
+                    type="number"
+                    step="0.01"
+                    value={editIncomeFormData.amount}
+                    onChange={(e) => setEditIncomeFormData(prev => ({ ...prev, amount: e.target.value }))}
+                    required
+                    className="text-foreground"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-income-type">Tipo</Label>
+                  <Select value={editIncomeFormData.type} onValueChange={(value) => setEditIncomeFormData(prev => ({ ...prev, type: value }))}>
+                    <SelectTrigger id="edit-income-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {incomeTypes.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-income-description">Descrição</Label>
+                  <Input
+                    id="edit-income-description"
+                    type="text"
+                    value={editIncomeFormData.description}
+                    onChange={(e) => setEditIncomeFormData(prev => ({ ...prev, description: e.target.value }))}
+                    required
+                    className="text-foreground"
+                  />
+                </div>
+                <Button type="submit" className="w-full">Salvar alterações</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
 
           <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
             <DialogContent>

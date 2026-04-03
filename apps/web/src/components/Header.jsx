@@ -58,12 +58,18 @@ const Header = () => {
 
           <div className="flex items-center gap-2">
             {isAuthenticated && (
-              <Link to="/integrations" className="hidden md:block mr-2">
-                <Button variant="secondary" size="sm" className="gap-2">
-                  <Plug className="w-4 h-4" />
-                  Integrações
+              <div className="hidden md:flex items-center gap-2 mr-2">
+                <Link to="/integrations">
+                  <Button variant="secondary" size="sm" className="gap-2">
+                    <Plug className="w-4 h-4" />
+                    Integrações
+                  </Button>
+                </Link>
+                <Button variant="outline" size="sm" className="gap-2" onClick={logout}>
+                  <LogOut className="w-4 h-4" />
+                  Sair
                 </Button>
-              </Link>
+              </div>
             )}
 
             <Button
@@ -138,6 +144,19 @@ const Header = () => {
                       )}
                     </Link>
                   ))}
+                  {isAuthenticated && (
+                    <Button
+                      variant="outline"
+                      className="mt-4 justify-start gap-2"
+                      onClick={() => {
+                        logout();
+                        setMobileOpen(false);
+                      }}
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sair
+                    </Button>
+                  )}
                 </nav>
               </SheetContent>
             </Sheet>
