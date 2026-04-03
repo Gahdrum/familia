@@ -24,7 +24,7 @@ const BusinessPage = () => {
     date: new Date().toISOString().split('T')[0],
     amount: '',
     description: '',
-    type: 'Salário'
+    type: 'salary'
   });
   const [withdrawalFormData, setWithdrawalFormData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -32,7 +32,17 @@ const BusinessPage = () => {
     description: ''
   });
 
-  const incomeTypes = ['Salário', 'Negócio', 'Pró-labore', 'Freelance', 'Outros'];
+  const incomeTypes = [
+    { value: 'salary', label: 'Salário' },
+    { value: 'business', label: 'Negócio' },
+    { value: 'proLabore', label: 'Pró-labore' },
+  ];
+
+  const incomeTypeLabels = {
+    salary: 'Salário',
+    business: 'Negócio',
+    proLabore: 'Pró-labore',
+  };
 
   useEffect(() => {
     fetchData();
@@ -41,15 +51,39 @@ const BusinessPage = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const mockIncomes = [
-        { id: 1, date: '2026-04-01', amount: 5000, description: 'Salário mensal', type: 'Salário' },
-        { id: 2, date: '2026-03-28', amount: 1200, description: 'Projeto freelance', type: 'Freelance' }
-      ];
-      const mockWithdrawals = [
-        { id: 1, date: '2026-04-01', amount: 2000, description: 'Transferência para conta pessoal' }
-      ];
-      setIncomes(mockIncomes);
-      setWithdrawals(mockWithdrawals);
+      const userId = pb.authStore.model?.id;
+
+      if (!userId) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      const [incomeRecords, withdrawalRecords] = await Promise.all([
+        pb.collection('incomes').getFullList({
+          filter: `userId = "${userId}"`,
+          sort: '-date,-created',
+          $autoCancel: false,
+        }),
+        pb.collection('transactions').getFullList({
+          filter: `userId = "${userId}" && type = "individual" && description ~ "retirada"`,
+          sort: '-date,-created',
+          $autoCancel: false,
+        }),
+      ]);
+
+      setIncomes(incomeRecords.map((item) => ({
+        id: item.id,
+        date: item.date,
+        amount: Number(item.amount || 0),
+        description: item.description || 'Receita',
+        type: incomeTypeLabels[item.type] || item.type,
+      })));
+
+      setWithdrawals(withdrawalRecords.map((item) => ({
+        id: item.id,
+        date: item.date,
+        amount: Number(item.amount || 0),
+        description: item.description || 'Retirada',
+      })));
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Erro ao carregar dados');
@@ -61,11 +95,29 @@ const BusinessPage = () => {
   const handleIncomeSubmit = async (e) => {
     e.preventDefault();
     try {
+      const userId = pb.authStore.model?.id;
+
+      if (!userId) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      const created = await pb.collection('incomes').create({
+        userId,
+        date: incomeFormData.date,
+        amount: Number(incomeFormData.amount),
+        description: incomeFormData.description?.trim() || '',
+        type: incomeFormData.type,
+        frequency: 'once',
+      }, { $autoCancel: false });
+
       const newIncome = {
-        id: Date.now(),
-        ...incomeFormData,
-        amount: parseFloat(incomeFormData.amount)
+        id: created.id,
+        date: created.date,
+        amount: Number(created.amount || 0),
+        description: created.description || 'Receita',
+        type: incomeTypeLabels[created.type] || created.type,
       };
+
       setIncomes(prev => [newIncome, ...prev]);
       toast.success('Receita adicionada com sucesso');
       setIncomeDialogOpen(false);
@@ -73,7 +125,7 @@ const BusinessPage = () => {
         date: new Date().toISOString().split('T')[0],
         amount: '',
         description: '',
-        type: 'Salário'
+        type: 'salary'
       });
     } catch (error) {
       console.error('Error creating income:', error);
@@ -84,11 +136,28 @@ const BusinessPage = () => {
   const handleWithdrawalSubmit = async (e) => {
     e.preventDefault();
     try {
+      const userId = pb.authStore.model?.id;
+
+      if (!userId) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      const created = await pb.collection('transactions').create({
+        userId,
+        type: 'individual',
+        description: withdrawalFormData.description?.trim() || 'Retirada',
+        amount: Number(withdrawalFormData.amount),
+        date: withdrawalFormData.date,
+        paymentMethod: 'transfer',
+      }, { $autoCancel: false });
+
       const newWithdrawal = {
-        id: Date.now(),
-        ...withdrawalFormData,
-        amount: parseFloat(withdrawalFormData.amount)
+        id: created.id,
+        date: created.date,
+        amount: Number(created.amount || 0),
+        description: created.description || 'Retirada',
       };
+
       setWithdrawals(prev => [newWithdrawal, ...prev]);
       toast.success('Retirada registrada com sucesso');
       setWithdrawalDialogOpen(false);
@@ -106,6 +175,7 @@ const BusinessPage = () => {
   const handleDeleteIncome = async (id) => {
     if (window.confirm('Deseja realmente excluir esta receita?')) {
       try {
+        await pb.collection('incomes').delete(id, { $autoCancel: false });
         setIncomes(prev => prev.filter(i => i.id !== id));
         toast.success('Receita excluída');
       } catch (error) {
@@ -118,6 +188,7 @@ const BusinessPage = () => {
   const handleDeleteWithdrawal = async (id) => {
     if (window.confirm('Deseja realmente excluir esta retirada?')) {
       try {
+        await pb.collection('transactions').delete(id, { $autoCancel: false });
         setWithdrawals(prev => prev.filter(w => w.id !== id));
         toast.success('Retirada excluída');
       } catch (error) {
@@ -253,7 +324,7 @@ const BusinessPage = () => {
                         </SelectTrigger>
                         <SelectContent>
                           {incomeTypes.map(type => (
-                            <SelectItem key={type} value={type}>{type}</SelectItem>
+                            <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

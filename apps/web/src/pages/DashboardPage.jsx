@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { useAuth } from '@/contexts/AuthContext.jsx';
+import pb from '@/lib/pocketbaseClient';
 import Header from '@/components/Header.jsx';
 import IntegrationsWidget from '@/components/IntegrationsWidget.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,19 +21,51 @@ const DashboardPage = () => {
     netBalance: 0
   });
   const [upcomingBills, setUpcomingBills] = useState([]);
+  const [expenseData, setExpenseData] = useState([]);
+  const [monthlyData, setMonthlyData] = useState([]);
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [currentUser]);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
       setError('');
 
-      const totalIncome = currentUser?.income || 0;
-      const fixedExpenses = 2847.50;
-      const variableExpenses = 1523.80;
+      const userId = pb.authStore.model?.id;
+
+      if (!userId) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      const startDate = new Date(currentYear, currentMonth, 1).toISOString().slice(0, 10);
+      const endDate = new Date(currentYear, currentMonth + 1, 1).toISOString().slice(0, 10);
+
+      const [transactions, incomes] = await Promise.all([
+        pb.collection('transactions').getFullList({
+          filter: `userId = "${userId}" && date >= "${startDate}" && date < "${endDate}"`,
+          sort: '-date',
+          expand: 'category',
+          $autoCancel: false,
+        }),
+        pb.collection('incomes').getFullList({
+          filter: `userId = "${userId}" && date >= "${startDate}" && date < "${endDate}"`,
+          sort: '-date',
+          $autoCancel: false,
+        }),
+      ]);
+
+      const totalIncome = incomes.reduce((sum, item) => sum + Number(item.amount || 0), 0) || Number(currentUser?.monthlyIncome || 0);
+      const fixedExpenses = transactions
+        .filter((item) => ['Moradia', 'Utilidades', 'Educação'].includes(item.expand?.category?.name || ''))
+        .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      const variableExpenses = transactions
+        .filter((item) => !['Moradia', 'Utilidades', 'Educação'].includes(item.expand?.category?.name || ''))
+        .reduce((sum, item) => sum + Number(item.amount || 0), 0);
       const netBalance = totalIncome - fixedExpenses - variableExpenses;
 
       setMetrics({
@@ -42,12 +75,59 @@ const DashboardPage = () => {
         netBalance
       });
 
-      const mockBills = [
-        { id: 1, description: 'Aluguel', amount: 1500, dueDate: '2026-04-05' },
-        { id: 2, description: 'Energia elétrica', amount: 287.50, dueDate: '2026-04-08' },
-        { id: 3, description: 'Internet', amount: 129.90, dueDate: '2026-04-10' }
-      ];
-      setUpcomingBills(mockBills);
+      const upcoming = [...transactions]
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(0, 5)
+        .map((item) => ({
+          id: item.id,
+          description: item.description || item.expand?.category?.name || 'Despesa',
+          amount: Number(item.amount || 0),
+          dueDate: item.date,
+        }));
+
+      const groupedByCategory = transactions.reduce((acc, item) => {
+        const category = item.expand?.category?.name || 'Outros';
+        acc[category] = (acc[category] || 0) + Number(item.amount || 0);
+        return acc;
+      }, {});
+
+      const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
+
+      const pieData = Object.entries(groupedByCategory).map(([name, value], index) => ({
+        name,
+        value,
+        color: colors[index % colors.length],
+      }));
+
+      const recentMonths = Array.from({ length: 4 }, (_, index) => {
+        const date = new Date(currentYear, currentMonth - (3 - index), 1);
+        return {
+          label: date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''),
+          start: new Date(date.getFullYear(), date.getMonth(), 1).toISOString().slice(0, 10),
+          end: new Date(date.getFullYear(), date.getMonth() + 1, 1).toISOString().slice(0, 10),
+        };
+      });
+
+      const [monthTransactions, monthIncomes] = await Promise.all([
+        Promise.all(recentMonths.map(({ start, end }) => pb.collection('transactions').getFullList({
+          filter: `userId = "${userId}" && date >= "${start}" && date < "${end}"`,
+          $autoCancel: false,
+        }))),
+        Promise.all(recentMonths.map(({ start, end }) => pb.collection('incomes').getFullList({
+          filter: `userId = "${userId}" && date >= "${start}" && date < "${end}"`,
+          $autoCancel: false,
+        }))),
+      ]);
+
+      const barData = recentMonths.map((month, index) => ({
+        month: month.label.charAt(0).toUpperCase() + month.label.slice(1),
+        receita: monthIncomes[index].reduce((sum, item) => sum + Number(item.amount || 0), 0),
+        despesas: monthTransactions[index].reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      }));
+
+      setUpcomingBills(upcoming);
+      setExpenseData(pieData);
+      setMonthlyData(barData);
 
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -56,20 +136,6 @@ const DashboardPage = () => {
       setLoading(false);
     }
   };
-
-  const expenseData = [
-    { name: 'Moradia', value: 1500, color: '#3b82f6' },
-    { name: 'Alimentação', value: 847.50, color: '#10b981' },
-    { name: 'Transporte', value: 500, color: '#f59e0b' },
-    { name: 'Lazer', value: 523.80, color: '#8b5cf6' }
-  ];
-
-  const monthlyData = [
-    { month: 'Jan', receita: 8500, despesas: 6200 },
-    { month: 'Fev', receita: 8500, despesas: 6800 },
-    { month: 'Mar', receita: 8500, despesas: 5900 },
-    { month: 'Abr', receita: metrics.totalIncome, despesas: metrics.fixedExpenses + metrics.variableExpenses }
-  ];
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('pt-BR', {
