@@ -48,7 +48,7 @@ export const AuthProvider = ({ children }) => {
         passwordConfirm: password,
         name,
         profile,
-        income: parseFloat(income) || 0
+        monthlyIncome: parseFloat(income) || 0
       };
 
       const record = await pb.collection('users').create(userData, { $autoCancel: false });
