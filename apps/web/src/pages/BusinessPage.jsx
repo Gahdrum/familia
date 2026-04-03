@@ -59,7 +59,7 @@ const BusinessPage = () => {
 
       const [incomeRecords, withdrawalRecords] = await Promise.all([
         pb.collection('incomes').getFullList({
-          filter: `userId = "${userId}" && (type = "business" || type = "proLabore")`,
+          filter: `userId = "${userId}" && scope = "business"`,
           sort: '-date,-created',
           $autoCancel: false,
         }),
@@ -107,6 +107,7 @@ const BusinessPage = () => {
         amount: Number(incomeFormData.amount),
         description: incomeFormData.description?.trim() || '',
         type: incomeFormData.type,
+        scope: 'business',
         frequency: 'once',
       }, { $autoCancel: false });
 

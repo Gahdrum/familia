@@ -74,7 +74,7 @@ const IndividualWalletPage = () => {
         listTransactionsByType('individual'),
         listCategories(),
         pb.collection('incomes').getFullList({
-          filter: `userId = "${userId}"`,
+          filter: `userId = "${userId}" && scope = "individual"`,
           sort: '-date,-created',
           $autoCancel: false,
         }),
@@ -117,6 +117,7 @@ const IndividualWalletPage = () => {
         amount: Number(incomeFormData.amount),
         description: incomeFormData.description?.trim() || '',
         type: incomeFormData.type,
+        scope: 'individual',
         frequency: 'once',
       }, { $autoCancel: false });
 

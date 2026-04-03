@@ -72,7 +72,7 @@ const JointWalletPage = () => {
         listTransactionsByType('joint'),
         listCategories(),
         pb.collection('incomes').getFullList({
-          filter: `userId = "${userId}"`,
+          filter: `userId = "${userId}" && scope = "joint"`,
           sort: '-date,-created',
           $autoCancel: false,
         }),
@@ -116,6 +116,7 @@ const JointWalletPage = () => {
         amount: Number(incomeFormData.amount),
         description: incomeFormData.description?.trim() || '',
         type: incomeFormData.type,
+        scope: 'joint',
         frequency: 'once',
       }, { $autoCancel: false });
 

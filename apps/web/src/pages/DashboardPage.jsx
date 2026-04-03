@@ -81,9 +81,15 @@ const DashboardPage = () => {
         date: item.date,
         amount: Number(item.amount || 0),
         description: item.description || 'Receita',
-        origin: incomeOriginByType[item.type] || 'Receita',
+        origin: item.scope === 'joint'
+          ? 'Carteira conjunta'
+          : item.scope === 'individual'
+            ? 'Carteira individual'
+            : item.scope === 'business'
+              ? 'Empresa'
+              : incomeOriginByType[item.type] || 'Receita',
         entryType: 'income',
-        category: item.type,
+        category: item.scope || item.type,
       }));
 
       const totalIncome = incomes.reduce((sum, item) => sum + Number(item.amount || 0), 0) || Number(currentUser?.monthlyIncome || 0);
