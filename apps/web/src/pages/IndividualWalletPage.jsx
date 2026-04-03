@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { useAuth } from '@/contexts/AuthContext';
+import pb from '@/lib/pocketbaseClient';
 import Header from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,8 +18,10 @@ import { createTransaction, deleteTransaction, listCategories, listTransactionsB
 const IndividualWalletPage = () => {
   const { currentUser } = useAuth();
   const [transactions, setTransactions] = useState([]);
+  const [incomes, setIncomes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [incomeDialogOpen, setIncomeDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [categories, setCategories] = useState([]);
   const [formData, setFormData] = useState({
@@ -27,6 +30,24 @@ const IndividualWalletPage = () => {
     category: '',
     description: ''
   });
+  const [incomeFormData, setIncomeFormData] = useState({
+    date: new Date().toISOString().split('T')[0],
+    amount: '',
+    description: '',
+    type: 'salary'
+  });
+
+  const incomeTypes = [
+    { value: 'salary', label: 'Salário' },
+    { value: 'business', label: 'Negócio' },
+    { value: 'proLabore', label: 'Pró-labore' },
+  ];
+
+  const incomeTypeLabels = {
+    salary: 'Salário',
+    business: 'Negócio',
+    proLabore: 'Pró-labore',
+  };
 
   useEffect(() => {
     fetchTransactions();
@@ -35,13 +56,31 @@ const IndividualWalletPage = () => {
   const fetchTransactions = async () => {
     try {
       setLoading(true);
-      const [transactionRecords, categoryRecords] = await Promise.all([
+      const userId = pb.authStore.model?.id;
+
+      if (!userId) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      const [transactionRecords, categoryRecords, incomeRecords] = await Promise.all([
         listTransactionsByType('individual'),
         listCategories(),
+        pb.collection('incomes').getFullList({
+          filter: `userId = "${userId}"`,
+          sort: '-date,-created',
+          $autoCancel: false,
+        }),
       ]);
 
       setTransactions(transactionRecords);
       setCategories(categoryRecords);
+      setIncomes(incomeRecords.map((item) => ({
+        id: item.id,
+        date: item.date,
+        amount: Number(item.amount || 0),
+        description: item.description || 'Receita',
+        type: incomeTypeLabels[item.type] || item.type,
+      })));
       setFormData((prev) => ({
         ...prev,
         category: prev.category || categoryRecords[0]?.id || '',
@@ -51,6 +90,47 @@ const IndividualWalletPage = () => {
       toast.error('Erro ao carregar transações');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleIncomeSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      const userId = pb.authStore.model?.id;
+
+      if (!userId) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      const created = await pb.collection('incomes').create({
+        userId,
+        date: incomeFormData.date,
+        amount: Number(incomeFormData.amount),
+        description: incomeFormData.description?.trim() || '',
+        type: incomeFormData.type,
+        frequency: 'once',
+      }, { $autoCancel: false });
+
+      setIncomes((prev) => [{
+        id: created.id,
+        date: created.date,
+        amount: Number(created.amount || 0),
+        description: created.description || 'Receita',
+        type: incomeTypeLabels[created.type] || created.type,
+      }, ...prev]);
+
+      toast.success('Receita adicionada com sucesso');
+      setIncomeDialogOpen(false);
+      setIncomeFormData({
+        date: new Date().toISOString().split('T')[0],
+        amount: '',
+        description: '',
+        type: 'salary'
+      });
+    } catch (error) {
+      console.error('Error creating income:', error);
+      toast.error('Erro ao adicionar receita');
     }
   };
 
@@ -103,6 +183,7 @@ const IndividualWalletPage = () => {
     : transactions.filter(t => t.category === selectedCategory);
 
   const monthlyTotal = filteredTransactions.reduce((sum, t) => sum + t.amount, 0);
+  const monthlyIncome = incomes.reduce((sum, income) => sum + income.amount, 0);
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -147,18 +228,85 @@ const IndividualWalletPage = () => {
               </h1>
               <p className="text-muted-foreground">Suas despesas pessoais</p>
             </div>
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Adicionar transação
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Nova transação individual</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Dialog open={incomeDialogOpen} onOpenChange={setIncomeDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="secondary" className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Adicionar receita
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Nova receita individual</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleIncomeSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="incomeDate">Data</Label>
+                      <Input
+                        id="incomeDate"
+                        type="date"
+                        value={incomeFormData.date}
+                        onChange={(e) => setIncomeFormData(prev => ({ ...prev, date: e.target.value }))}
+                        required
+                        className="text-foreground"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="incomeAmount">Valor</Label>
+                      <Input
+                        id="incomeAmount"
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={incomeFormData.amount}
+                        onChange={(e) => setIncomeFormData(prev => ({ ...prev, amount: e.target.value }))}
+                        required
+                        className="text-foreground"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="incomeType">Tipo</Label>
+                      <Select value={incomeFormData.type} onValueChange={(value) => setIncomeFormData(prev => ({ ...prev, type: value }))}>
+                        <SelectTrigger id="incomeType">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {incomeTypes.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="incomeDescription">Descrição</Label>
+                      <Input
+                        id="incomeDescription"
+                        type="text"
+                        placeholder="Descrição da receita"
+                        value={incomeFormData.description}
+                        onChange={(e) => setIncomeFormData(prev => ({ ...prev, description: e.target.value }))}
+                        required
+                        className="text-foreground"
+                      />
+                    </div>
+                    <Button type="submit" className="w-full">Adicionar receita</Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Adicionar transação
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Nova transação individual</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="date">Data</Label>
                     <Input
@@ -209,9 +357,10 @@ const IndividualWalletPage = () => {
                     />
                   </div>
                   <Button type="submit" className="w-full">Adicionar</Button>
-                </form>
-              </DialogContent>
-            </Dialog>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
 
           <Card className="shadow-lg bg-gradient-to-br from-primary/10 to-secondary/10">
@@ -224,6 +373,45 @@ const IndividualWalletPage = () => {
             <CardContent>
               <div className="text-3xl font-bold">{formatCurrency(monthlyTotal)}</div>
               <p className="text-sm text-muted-foreground mt-1">Total de despesas pessoais</p>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Receitas pessoais</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-secondary">{formatCurrency(monthlyIncome)}</div>
+              <p className="text-sm text-muted-foreground mt-1">Total de receitas pessoais</p>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle>Receitas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {incomes.length === 0 ? (
+                <div className="text-center py-12">
+                  <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">Nenhuma receita encontrada</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {incomes.map((income) => (
+                    <div key={income.id} className="flex items-center justify-between p-4 rounded-lg bg-muted/50 hover:bg-muted transition-all duration-200">
+                      <div className="flex-1">
+                        <p className="font-medium">{income.description}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs px-2 py-1 rounded-full bg-secondary/10 text-secondary">{income.type}</span>
+                          <span className="text-sm text-muted-foreground">{formatDate(income.date)}</span>
+                        </div>
+                      </div>
+                      <p className="font-bold text-lg text-secondary">{formatCurrency(income.amount)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
