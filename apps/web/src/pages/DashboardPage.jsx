@@ -23,6 +23,7 @@ const DashboardPage = () => {
   const [upcomingBills, setUpcomingBills] = useState([]);
   const [expenseData, setExpenseData] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
+  const [recentEntries, setRecentEntries] = useState([]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -59,6 +60,32 @@ const DashboardPage = () => {
         }),
       ]);
 
+      const transactionsWithOrigin = transactions.map((item) => ({
+        id: item.id,
+        date: item.date,
+        amount: Number(item.amount || 0),
+        description: item.description || item.expand?.category?.name || 'Despesa',
+        origin: item.type === 'joint' ? 'Carteira conjunta' : 'Carteira individual',
+        entryType: 'expense',
+        category: item.expand?.category?.name || 'Outros',
+      }));
+
+      const incomeOriginByType = {
+        salary: 'Carteira individual',
+        business: 'Empresa',
+        proLabore: 'Empresa',
+      };
+
+      const incomesWithOrigin = incomes.map((item) => ({
+        id: item.id,
+        date: item.date,
+        amount: Number(item.amount || 0),
+        description: item.description || 'Receita',
+        origin: incomeOriginByType[item.type] || 'Receita',
+        entryType: 'income',
+        category: item.type,
+      }));
+
       const totalIncome = incomes.reduce((sum, item) => sum + Number(item.amount || 0), 0) || Number(currentUser?.monthlyIncome || 0);
       const fixedExpenses = transactions
         .filter((item) => ['Moradia', 'Utilidades', 'Educação'].includes(item.expand?.category?.name || ''))
@@ -85,8 +112,8 @@ const DashboardPage = () => {
           dueDate: item.date,
         }));
 
-      const groupedByCategory = transactions.reduce((acc, item) => {
-        const category = item.expand?.category?.name || 'Outros';
+      const groupedByCategory = transactionsWithOrigin.reduce((acc, item) => {
+        const category = item.category || 'Outros';
         acc[category] = (acc[category] || 0) + Number(item.amount || 0);
         return acc;
       }, {});
@@ -128,6 +155,12 @@ const DashboardPage = () => {
       setUpcomingBills(upcoming);
       setExpenseData(pieData);
       setMonthlyData(barData);
+      setRecentEntries([
+        ...incomesWithOrigin,
+        ...transactionsWithOrigin,
+      ]
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 8));
 
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -324,6 +357,41 @@ const DashboardPage = () => {
               <IntegrationsWidget />
             </div>
           </div>
+
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle>Lançamentos recentes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {recentEntries.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>Nenhum lançamento recente</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {recentEntries.map((entry) => (
+                    <div key={`${entry.entryType}-${entry.id}`} className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                      <div>
+                        <p className="font-medium">{entry.description}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <span className={`text-xs px-2 py-1 rounded-full ${entry.entryType === 'income' ? 'bg-secondary/10 text-secondary' : 'bg-primary/10 text-primary'}`}>
+                            {entry.entryType === 'income' ? 'Receita' : 'Despesa'}
+                          </span>
+                          <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
+                            {entry.origin}
+                          </span>
+                          <span className="text-sm text-muted-foreground">{formatDate(entry.date)}</span>
+                        </div>
+                      </div>
+                      <p className={`font-bold text-lg ${entry.entryType === 'income' ? 'text-secondary' : 'text-foreground'}`}>
+                        {formatCurrency(entry.amount)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </main>
     </div>
