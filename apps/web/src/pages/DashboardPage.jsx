@@ -192,6 +192,19 @@ const DashboardPage = () => {
     });
   };
 
+  const getOriginBadgeClass = (origin) => {
+    switch (origin) {
+      case 'Carteira conjunta':
+        return 'bg-primary/10 text-primary';
+      case 'Carteira individual':
+        return 'bg-secondary/10 text-secondary';
+      case 'Empresa':
+        return 'bg-amber-500/10 text-amber-400';
+      default:
+        return 'bg-muted text-muted-foreground';
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -385,7 +398,7 @@ const DashboardPage = () => {
                           <span className={`text-xs px-2 py-1 rounded-full ${entry.entryType === 'income' ? 'bg-secondary/10 text-secondary' : 'bg-primary/10 text-primary'}`}>
                             {entry.entryType === 'income' ? 'Receita' : 'Despesa'}
                           </span>
-                          <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
+                          <span className={`text-xs px-2 py-1 rounded-full ${getOriginBadgeClass(entry.origin)}`}>
                             {entry.origin}
                           </span>
                           <span className="text-sm text-muted-foreground">{formatDate(entry.date)}</span>
