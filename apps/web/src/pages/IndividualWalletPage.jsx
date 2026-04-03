@@ -29,6 +29,7 @@ const IndividualWalletPage = () => {
     date: new Date().toISOString().split('T')[0],
     amount: '',
     category: '',
+    expenseKind: 'variable',
     description: ''
   });
   const [incomeFormData, setIncomeFormData] = useState({
@@ -166,6 +167,7 @@ const IndividualWalletPage = () => {
         date: new Date().toISOString().split('T')[0],
         amount: '',
         category: categories[0]?.id || '',
+        expenseKind: 'variable',
         description: ''
       });
     } catch (error) {
@@ -393,8 +395,8 @@ const IndividualWalletPage = () => {
                       className="text-foreground"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="category">Categoria</Label>
+                    <div className="space-y-2">
+                      <Label htmlFor="category">Categoria</Label>
                     <Select value={formData.category} onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}>
                       <SelectTrigger id="category">
                         <SelectValue placeholder="Selecione uma categoria" />
@@ -404,8 +406,20 @@ const IndividualWalletPage = () => {
                           <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                         ))}
                       </SelectContent>
-                    </Select>
-                  </div>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="expenseKind">Tipo de despesa</Label>
+                      <Select value={formData.expenseKind} onValueChange={(value) => setFormData(prev => ({ ...prev, expenseKind: value }))}>
+                        <SelectTrigger id="expenseKind">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fixed">Fixa</SelectItem>
+                          <SelectItem value="variable">Variável</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   <div className="space-y-2">
                     <Label htmlFor="description">Descrição</Label>
                     <Input

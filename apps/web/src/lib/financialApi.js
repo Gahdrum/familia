@@ -34,6 +34,7 @@ function normalizeTransaction(record) {
     description: record.description || 'Sem descrição',
     type: record.type,
     paymentMethod: record.paymentMethod,
+    expenseKind: record.expenseKind || 'variable',
     category: record.expand?.category?.name || record.category || 'Outros',
     categoryId: typeof record.category === 'string' ? record.category : record.category?.id || null,
     raw: record,
@@ -92,6 +93,7 @@ async function createTransaction(data) {
       amount: Number(data.amount),
       date: data.date,
       paymentMethod: data.paymentMethod || 'cash',
+      expenseKind: data.expenseKind || 'variable',
     },
     { $autoCancel: false },
   );

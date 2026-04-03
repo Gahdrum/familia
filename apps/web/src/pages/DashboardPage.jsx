@@ -96,10 +96,10 @@ const DashboardPage = () => {
 
       const totalIncome = validIncomes.reduce((sum, item) => sum + Number(item.amount || 0), 0) || Number(currentUser?.monthlyIncome || 0);
       const fixedExpenses = transactions
-        .filter((item) => ['Moradia', 'Utilidades', 'Educação'].includes(item.expand?.category?.name || ''))
+        .filter((item) => item.expenseKind === 'fixed')
         .reduce((sum, item) => sum + Number(item.amount || 0), 0);
       const variableExpenses = transactions
-        .filter((item) => !['Moradia', 'Utilidades', 'Educação'].includes(item.expand?.category?.name || ''))
+        .filter((item) => (item.expenseKind || 'variable') === 'variable')
         .reduce((sum, item) => sum + Number(item.amount || 0), 0);
       const netBalance = totalIncome - fixedExpenses - variableExpenses;
 
